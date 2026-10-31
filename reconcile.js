@@ -8,11 +8,39 @@ const fs = require("fs");
 let total = 0;
 let count = 0;
 
-const lines = fs.readFileSync("payments.jsonl", "utf8").split("\n").filter((l) => l.length > 0);
+const lines = fs
+  .readFileSync("payments.jsonl", "utf8")
+  .split("\n")
+  .filter((l) => l.length > 0);
+
+const txnRegistry = new Map();
+
 for (const line of lines) {
-  const event = JSON.parse(line);
-  if (event.status === "success") {
-    total += Number(event.amount);
+  if (!line.trim()) continue;
+
+  try {
+    const event = JSON.parse(line);
+    const id = event.txn_id;
+
+    if (!id) continue;
+
+    const status = event.status || "pending";
+    const amount = Number(event.amount) || 0;
+    const currentTs = event.ts ? new Date(event.ts).getTime() : 0;
+
+    const existingTxn = txnRegistry.get(id);
+
+    if (!existingTxn || currentTs >= existingTxn.ts) {
+      txnRegistry.set(id, { status, amount, ts: currentTs });
+    }
+  } catch (error) {
+    continue;
+  }
+}
+
+for (const txn of txnRegistry.values()) {
+  if (txn.status === "success") {
+    total += txn.amount;
     count += 1;
   }
 }
